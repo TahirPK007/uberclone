@@ -1,44 +1,50 @@
 import {View, Text, StyleSheet} from 'react-native';
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import MapView, {Marker, PROVIDER_GOOGLE} from 'react-native-maps';
-import {useSelector} from 'react-redux';
-import {selectOrigin} from '../slices/navSlice';
+import {useDispatch, useSelector} from 'react-redux';
+import {
+  selectDestination,
+  selectOrigin,
+  settraveTimeInformation,
+} from '../slices/navSlice';
 import {PermissionsAndroid} from 'react-native';
+import MapViewDirections from 'react-native-maps-directions';
 
 const Map = () => {
-  const requestCameraPermission = async () => {
-    try {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        {
-          title: 'Cool Photo App Camera Permission',
-          message:
-            'Cool Photo App needs access to your camera ' +
-            'so you can take awesome pictures.',
-          buttonNeutral: 'Ask Me Later',
-          buttonNegative: 'Cancel',
-          buttonPositive: 'OK',
-        },
-      );
-      if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-        console.log('You can use the Location');
-      } else {
-        console.log('Location permission denied');
-      }
-    } catch (err) {
-      console.warn(err);
-    }
-  };
+  const origin = useSelector(selectOrigin);
+  const destination = useSelector(selectDestination);
+  const mapref = useRef(null);
+  const dispatch = useDispatch();
 
   useEffect(() => {
-    requestCameraPermission();
-  }, []);
+    if (!origin || !destination) return;
+    mapref.current.fitToSuppliedMarkers(['origin', 'destination'], {
+      edgePadding: {top: 50, bottom: 50, right: 50, left: 50},
+    });
+  }, [origin, destination]);
 
-  const origin = useSelector(selectOrigin);
-  console.log(origin, 'this is data');
+  useEffect(() => {
+    if (!origin || !destination) return;
+    const gettravetime = async () => {
+      fetch(
+        `https://maps.googleapis.com/maps/api/distancematrix/json?units=imperial&origins=${
+          origin.description
+        }&destinations=${
+          destination.description
+        }&key=${'AIzaSyBGQWvAdOVL5AgPNEngX25hPtT5xgxF_n8'}`,
+      )
+        .then(res => res.json())
+        .then(data => {
+          dispatch(settraveTimeInformation(data.rows[0].elements[0]));
+        });
+    };
+    gettravetime();
+  }, [origin, destination, 'AIzaSyBGQWvAdOVL5AgPNEngX25hPtT5xgxF_n8']);
+
   return (
     <View style={{flex: 1}}>
       <MapView
+        ref={mapref}
         style={{width: '100%', height: '100%'}}
         initialRegion={{
           latitude: origin.location.lat,
@@ -46,6 +52,15 @@ const Map = () => {
           latitudeDelta: 0.0922,
           longitudeDelta: 0.0421,
         }}>
+        {origin && destination && (
+          <MapViewDirections
+            origin={origin.description}
+            destination={destination.description}
+            apikey={'AIzaSyBGQWvAdOVL5AgPNEngX25hPtT5xgxF_n8'}
+            strokeWidth={3}
+            strokeColor="black"
+          />
+        )}
         {origin?.location && (
           <Marker
             coordinate={{
@@ -55,6 +70,17 @@ const Map = () => {
             title="origin"
             description={origin.description}
             identifier="origin"
+          />
+        )}
+        {destination?.location && (
+          <Marker
+            coordinate={{
+              latitude: destination.location.lat,
+              longitude: destination.location.lng,
+            }}
+            title="destination"
+            description={destination.description}
+            identifier="destination"
           />
         )}
       </MapView>
